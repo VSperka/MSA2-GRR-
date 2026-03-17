@@ -13,7 +13,7 @@ st.write("Zadej parametry studie v levém panelu, uprav naměřená data v tabul
 
 # --- 1. Postranní panel (Sidebar) pro zadání parametrů ---
 st.sidebar.header("Základní parametry")
-num_operators = st.sidebar.number_input("Počet operátorů", min_value=2, max_value=10, value=3)
+num_operators = st.sidebar.number_input("Počet operátorů", min_value=1, max_value=10, value=3)
 num_parts = st.sidebar.number_input("Počet kusů", min_value=2, max_value=30, value=10)
 num_trials = st.sidebar.number_input("Počet opakování", min_value=2, max_value=10, value=2)
 
@@ -54,16 +54,40 @@ edited_df = st.data_editor(df_base, use_container_width=True, hide_index=True)
 # Tlačítko, které spustí celou matematiku
 if st.button("Vyhodnotit Gage R&R", type="primary"):
     
-    st.markdown("---")
-    st.header("Výsledky analýzy")
-    
-    # Přejmenujeme sloupce zpět do angličtiny, aby to vzal statistický model
-    df_model = edited_df.rename(columns={
-        "Operátor": "Operator", 
-        "Kus": "Part", 
-        "Opakování": "Trial", 
-        "Naměřená hodnota": "Measurement"
-    })
+if num_operators == 1:
+        st.info("Byl zvolen 1 operátor: Analýza probíhá jako Studie Typu 3 (automatizovaný systém). Vliv operátora (AV) se neuvažuje a je roven nule.")
+        
+        # Jednofaktorová ANOVA (pouze vliv kusu)
+        model = ols('Measurement ~ C(Part)', data=df_model).fit()
+        anova_table = sm.stats.anova_lm(model, typ=2)
+        
+        MS_part = anova_table.loc['C(Part)', 'sum_sq'] / anova_table.loc['C(Part)', 'df']
+        MS_rep = anova_table.loc['Residual', 'sum_sq'] / anova_table.loc['Residual', 'df']
+        
+        var_EV = MS_rep
+        var_AV = 0.0
+        var_GRR = var_EV + var_AV
+        var_PV = max(0, (MS_part - MS_rep) / num_trials)
+        var_TV = var_GRR + var_PV
+
+    else:
+        # Původní dvoufaktorová ANOVA s interakcí pro více operátorů
+        model = ols('Measurement ~ C(Part) * C(Operator)', data=df_model).fit()
+        anova_table = sm.stats.anova_lm(model, typ=2)
+        
+        MS_part = anova_table.loc['C(Part)', 'sum_sq'] / anova_table.loc['C(Part)', 'df']
+        MS_op = anova_table.loc['C(Operator)', 'sum_sq'] / anova_table.loc['C(Operator)', 'df']
+        MS_int = anova_table.loc['C(Part):C(Operator)', 'sum_sq'] / anova_table.loc['C(Part):C(Operator)', 'df']
+        MS_rep = anova_table.loc['Residual', 'sum_sq'] / anova_table.loc['Residual', 'df']
+        
+        var_EV = MS_rep
+        var_op = max(0, (MS_op - MS_int) / (num_parts * num_trials))
+        var_int = max(0, (MS_int - MS_rep) / num_trials)
+        var_AV = var_op + var_int
+        
+        var_GRR = var_EV + var_AV
+        var_PV = max(0, (MS_part - MS_int) / (num_operators * num_trials))
+        var_TV = var_GRR + var_PV
     
     # Sestavení a výpočet ANOVA modelu
     model = ols('Measurement ~ C(Part) * C(Operator)', data=df_model).fit()
