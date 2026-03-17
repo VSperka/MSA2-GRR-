@@ -7,15 +7,24 @@ import statsmodels.api as sm
 from statsmodels.formula.api import ols
 
 # --- Nastavení vzhledu stránky ---
-st.set_page_config(page_title="Gage R&R Analýza", layout="wide")
-st.title("Metodika MSA: Gage R&R (Metoda ANOVA)")
-st.write("Zadej parametry studie v levém panelu, uprav naměřená data v tabulce a spusť vyhodnocení.")
+st.set_page_config(page_title="MSA Analýza", layout="wide")
 
 # --- 1. Postranní panel (Sidebar) pro zadání parametrů ---
 st.sidebar.header("Základní parametry")
 num_operators = st.sidebar.number_input("Počet operátorů", min_value=1, max_value=10, value=3)
 num_parts = st.sidebar.number_input("Počet kusů", min_value=2, max_value=30, value=10)
 num_trials = st.sidebar.number_input("Počet opakování", min_value=2, max_value=10, value=2)
+
+# --- Dynamický název aplikace podle počtu operátorů ---
+if num_operators == 1:
+    study_title = "Studie Typu 3 (Automatizovaný systém)"
+    main_metric_label = "Celková chyba (EV)"
+else:
+    study_title = "Gage R&R (Metoda ANOVA)"
+    main_metric_label = "Gage R&R"
+
+st.title(f"Metodika MSA: {study_title}")
+st.write("Zadej parametry studie v levém panelu, uprav naměřená data v tabulce a spusť vyhodnocení.")
 
 st.sidebar.header("Specifikace (Toleranční pole)")
 nominal_value = st.sidebar.number_input("Jmenovitá (cílová) hodnota", value=100.0)
@@ -54,8 +63,27 @@ edited_df = st.data_editor(df_base, use_container_width=True, hide_index=True)
 # Tlačítko, které spustí celou matematiku
 if st.button("Vyhodnotit Gage R&R", type="primary"):
     
+    st.markdown("---")
+    st.header("Výsledky analýzy")
+    
+    # 1. KROK: Příprava dat (tento krok ti pravděpodobně chyběl)
+    # Přejmenujeme sloupce z české tabulky zpět do angličtiny pro statistický model
+    df_model = edited_df.rename(columns={
+        "Operátor": "Operator", 
+        "Kus": "Part", 
+        "Opakování": "Trial", 
+        "Naměřená hodnota": "Measurement"
+    })
+    
+    # Očistíme data pro případ, že by po vložení z Excelu vznikly prázdné řádky
+    df_model = df_model.dropna(subset=['Measurement'])
+    
+    # Ujistíme se, že hodnoty jsou čísla (při kopírování z Excelu to občas zlobí)
+    df_model['Measurement'] = pd.to_numeric(df_model['Measurement'], errors='coerce')
+    
+    # 2. KROK: Rozhodnutí podle počtu operátorů
     if num_operators == 1:
-        st.info("Byl zvolen 1 operátor: Analýza probíhá jako Studie Typu 3 (automatizovaný systém). Vliv operátora (AV) se neuvažuje a je roven nule.")
+        st.info("💡 Byl zvolen 1 operátor: Analýza probíhá jako Studie Typu 3 (automatizovaný systém). Vliv operátora (AV) se neuvažuje a je roven nule.")
         
         # Jednofaktorová ANOVA (pouze vliv kusu)
         model = ols('Measurement ~ C(Part)', data=df_model).fit()
@@ -65,7 +93,7 @@ if st.button("Vyhodnotit Gage R&R", type="primary"):
         MS_rep = anova_table.loc['Residual', 'sum_sq'] / anova_table.loc['Residual', 'df']
         
         var_EV = MS_rep
-        var_AV = 0.0
+        var_AV = 0.0 # Operátor nehraje roli
         var_GRR = var_EV + var_AV
         var_PV = max(0, (MS_part - MS_rep) / num_trials)
         var_TV = var_GRR + var_PV
@@ -89,55 +117,33 @@ if st.button("Vyhodnotit Gage R&R", type="primary"):
         var_PV = max(0, (MS_part - MS_int) / (num_operators * num_trials))
         var_TV = var_GRR + var_PV
     
-    # Sestavení a výpočet ANOVA modelu
-    model = ols('Measurement ~ C(Part) * C(Operator)', data=df_model).fit()
-    anova_table = sm.stats.anova_lm(model, typ=2)
+    # 3. KROK: Výpočet procent
+    pct_EV = (np.sqrt(var_EV) / np.sqrt(var_TV)) * 100 if var_TV > 0 else 0
+    pct_AV = (np.sqrt(var_AV) / np.sqrt(var_TV)) * 100 if var_TV > 0 else 0
+    pct_GRR = (np.sqrt(var_GRR) / np.sqrt(var_TV)) * 100 if var_TV > 0 else 0
+    pct_PV = (np.sqrt(var_PV) / np.sqrt(var_TV)) * 100 if var_TV > 0 else 0
     
-    # Extrakce středních čtverců (Mean Squares)
-    MS_part = anova_table.loc['C(Part)', 'sum_sq'] / anova_table.loc['C(Part)', 'df']
-    MS_op = anova_table.loc['C(Operator)', 'sum_sq'] / anova_table.loc['C(Operator)', 'df']
-    MS_int = anova_table.loc['C(Part):C(Operator)', 'sum_sq'] / anova_table.loc['C(Part):C(Operator)', 'df']
-    MS_rep = anova_table.loc['Residual', 'sum_sq'] / anova_table.loc['Residual', 'df']
-    
-    # Výpočet rozptylů (Variance)
-    var_EV = MS_rep # Opakovatelnost (vybavení)
-    
-    # Reprodukovatelnost (operátoři + interakce)
-    var_op = max(0, (MS_op - MS_int) / (num_parts * num_trials))
-    var_int = max(0, (MS_int - MS_rep) / num_trials)
-    var_AV = var_op + var_int
-    
-    var_GRR = var_EV + var_AV # Celá chyba měření
-    var_PV = max(0, (MS_part - MS_int) / (num_operators * num_trials)) # Variabilita kusů
-    var_TV = var_GRR + var_PV # Celková variabilita procesu
-    
-    # Výpočet % z celkové variace
-    pct_EV = (np.sqrt(var_EV) / np.sqrt(var_TV)) * 100
-    pct_AV = (np.sqrt(var_AV) / np.sqrt(var_TV)) * 100
-    pct_GRR = (np.sqrt(var_GRR) / np.sqrt(var_TV)) * 100
-    pct_PV = (np.sqrt(var_PV) / np.sqrt(var_TV)) * 100
-    
-    # Počet rozlišitelných kategorií (NDC)
     ndc = max(1, int(np.sqrt(2) * (np.sqrt(var_PV) / np.sqrt(var_GRR)))) if var_GRR > 0 else 999
     
-    # --- 4. Zobrazení výsledků formou metrik a tabulky ---
-    # Výpočet % z tolerance (Precision to Tolerance)
+    # Výpočet % z tolerance
     tolerance = usl - lsl
     if tolerance > 0:
         pct_tol_GRR = ((np.sqrt(var_GRR) * 6) / tolerance) * 100
     else:
         pct_tol_GRR = 0.0
 
+    # --- 4. Zobrazení výsledků formou metrik ---
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Gage R&R (% ze studie)", f"{pct_GRR:.2f} %", 
+    col1.metric(f"{main_metric_label} (% ze studie)", f"{pct_GRR:.2f} %", 
                 delta="Vyhovuje" if pct_GRR <= 10 else "Podmíněně" if pct_GRR <= 30 else "Nevyhovuje",
                 delta_color="inverse")
     
     col2.metric("Opakovatelnost (EV)", f"{pct_EV:.2f} %")
     
+    # Pokud je 1 operátor, AV je nula, tak ať to uživatele nemate, můžeme to i skrýt, nebo nechat 0%
     col3.metric("Reprodukovat. (AV)", f"{pct_AV:.2f} %")
     
-    col4.metric("Gage R&R (% z tolerance)", f"{pct_tol_GRR:.2f} %",
+    col4.metric(f"{main_metric_label} (% z tolerance)", f"{pct_tol_GRR:.2f} %",
                 delta="Vyhovuje" if pct_tol_GRR <= 10 else "Podmíněně" if pct_tol_GRR <= 30 else "Nevyhovuje",
                 delta_color="inverse")
     
@@ -161,12 +167,20 @@ if st.button("Vyhodnotit Gage R&R", type="primary"):
     axes[0].tick_params(axis='x', rotation=15)
     
     # Graf 2: Interakce (Průměry kusů vs. Operátoři)
-    sns.pointplot(data=df_model, x='Part', y='Measurement', hue='Operator', ax=axes[1], markers='o', errorbar=None)
-    axes[1].set_title("Průměry naměřených hodnot (Interakce)")
-    axes[1].set_xlabel("Kusy")
-    axes[1].set_ylabel("Naměřená hodnota")
-    axes[1].tick_params(axis='x', rotation=45)
-    axes[1].grid(True, linestyle=':', alpha=0.7)
+    if num_operators > 1:
+        sns.pointplot(data=df_model, x='Part', y='Measurement', hue='Operator', ax=axes[1], markers='o', errorbar=None)
+        axes[1].set_title("Průměry naměřených hodnot (Interakce)")
+        axes[1].set_xlabel("Kusy")
+        axes[1].set_ylabel("Naměřená hodnota")
+        axes[1].tick_params(axis='x', rotation=45)
+        axes[1].grid(True, linestyle=':', alpha=0.7)
+    else:
+        # Pokud je 1 operátor, vykreslíme místo toho boxplot rozptylu jednotlivých kusů
+        sns.boxplot(data=df_model, x='Part', y='Measurement', ax=axes[1], palette='Set2')
+        axes[1].set_title("Variabilita naměřených hodnot pro jednotlivé kusy")
+        axes[1].set_xlabel("Kusy")
+        axes[1].set_ylabel("Naměřená hodnota")
+        axes[1].tick_params(axis='x', rotation=45)
     
     plt.tight_layout()
     st.pyplot(fig) # Streamlit funkce pro zobrazení matplotlib grafu
