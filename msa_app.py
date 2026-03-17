@@ -54,7 +54,7 @@ edited_df = st.data_editor(df_base, use_container_width=True, hide_index=True)
 # Tlačítko, které spustí celou matematiku
 if st.button("Vyhodnotit Gage R&R", type="primary"):
     
-if num_operators == 1:
+    if num_operators == 1:
         st.info("Byl zvolen 1 operátor: Analýza probíhá jako Studie Typu 3 (automatizovaný systém). Vliv operátora (AV) se neuvažuje a je roven nule.")
         
         # Jednofaktorová ANOVA (pouze vliv kusu)
