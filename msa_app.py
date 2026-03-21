@@ -20,7 +20,7 @@ if num_operators == 1:
     study_title = "Studie Typu 3 (Automatizovaný systém)"
     main_metric_label = "Celková chyba (EV)"
 else:
-    study_title = "Gage R&R (Metoda ANOVA)"
+    study_title = "Studie typu 2 (Gage R&R (Metoda ANOVA))"
     main_metric_label = "Gage R&R"
 
 st.title(f"Metodika MSA: {study_title}")
