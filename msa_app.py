@@ -27,7 +27,6 @@ st.title(f"Metodika MSA: {study_title}")
 st.write("Zadej parametry studie v levém panelu, uprav naměřená data v tabulce a spusť vyhodnocení.")
 
 st.sidebar.header("Specifikace (Toleranční pole)")
-nominal_value = st.sidebar.number_input("Jmenovitá (cílová) hodnota", value=100.0)
 lsl = st.sidebar.number_input("Spodní mez (LSL)", value=90.0)
 usl = st.sidebar.number_input("Horní mez (USL)", value=110.0)
 
