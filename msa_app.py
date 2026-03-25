@@ -193,16 +193,20 @@ with tab2:
     st.header("Analýza stability měřicího systému (Drift)")
     st.write("Zadej periodicky naměřené hodnoty jednoho referenčního kusu (Master Part).")
 
+    # Nové zadávací pole pro počet měření
+    num_drift_points = st.number_input("Počet měření etalonu", min_value=2, max_value=200, value=20, step=1)
+
     # 1. Příprava datové tabulky pro drift
     @st.cache_data
-    def generate_drift_data(n_points=20):
+    def generate_drift_data(n_points):
         np.random.seed(10)
         # Simulace stabilního procesu s mírným šumem
         base_values = np.random.normal(100, 0.5, n_points)
         data = [{"Čas měření": f"Měření {i+1}", "Hodnota etalonu": round(val, 2)} for i, val in enumerate(base_values)]
         return pd.DataFrame(data)
 
-    df_drift_base = generate_drift_data()
+    # Volání funkce s dynamickou proměnnou místo pevného čísla
+    df_drift_base = generate_drift_data(num_drift_points)
     edited_drift_df = st.data_editor(df_drift_base, use_container_width=True, hide_index=True)
 
     # 2. Výpočet regulačních mezí (I-MR)
