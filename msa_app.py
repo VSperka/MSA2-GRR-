@@ -151,7 +151,7 @@ with tab1:
                     delta="Vyhovuje" if pct_tol_GRR <= 10 else "Podmíněně" if pct_tol_GRR <= 30 else "Nevyhovuje",
                     delta_color="inverse")
         
-        st.write(f"**Počet rozlišitelných kategorií (NDC):** {ndc} (Požadavek: ≥ 5)")
+        st.write(f"**Počet rozlišitelných kategorií (NDC):** {ndc} (Požadavek: ≥ 5) (ndc = 1,41*(smodch PV / smodch GRR)")
         
         # --- 5. Vykreslení grafů ---
         st.subheader("Grafické vyhodnocení")
